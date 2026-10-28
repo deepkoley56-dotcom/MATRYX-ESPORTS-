@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09090d">
+  <title>MATRYX ESPORTS — Free Fire Tournaments</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg-glow"></div>
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark">M</span><span>MATRYX <b>ESPORTS</b><small>COMMUNITY TOURNAMENTS</small></span></a>
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+    <nav id="nav">
+      <a href="#tournaments">Tournaments</a><a href="#guilds">Guild Wars</a><a href="#leaderboard">Leaderboard</a><a href="#champions">Champions</a>
+      <button class="btn btn-outline" id="openAuth">Login / Register</button>
+      <button class="btn btn-primary hidden" id="openDashboard">My Dashboard</button>
+      <button class="btn btn-outline hidden" id="logoutBtn">Logout</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="live-dot"></span> FREE ENTRY • COMMUNITY ESPORTS</div>
+        <h1>ENTER THE ARENA.<br><span>OWN THE RANK.</span></h1>
+        <p>Join tournaments, register your guild, challenge rivals and fight for the monthly champion title.</p>
+        <div class="hero-actions"><a class="btn btn-primary" href="#tournaments">Explore tournaments ↗</a><a class="btn btn-outline" href="#guilds">Guild vs Guild</a></div>
+        <div class="hero-stats"><div><b id="statTournaments">—</b><small>Tournaments</small></div><div><b id="statGuilds">—</b><small>Registered guilds</small></div><div><b id="statMatches">—</b><small>Guild matches</small></div></div>
+      </div>
+      <div class="hero-art"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="hero-emblem">M<span>⚡</span></div><div class="floating-tag tag-top">#1 MONTHLY GUILD</div><div class="floating-tag tag-bottom">FREE ENTRY • REAL SKILL</div></div>
+    </section>
+
+    <section class="section" id="tournaments">
+      <div class="section-heading"><div><div class="eyebrow">COMPETE YOUR WAY</div><h2>Featured <span>Tournaments</span></h2></div><span class="section-note">Free entry community events</span></div>
+      <div class="cards-grid" id="tournamentList"><div class="empty-state">Loading tournaments…</div></div>
+    </section>
+
+    <section class="section guild-section" id="guilds">
+      <div class="section-heading"><div><div class="eyebrow">BUILD YOUR LEGACY</div><h2>Guild <span>vs Guild</span></h2></div><button class="btn btn-primary" id="registerGuildBtn">+ Register guild</button></div>
+      <div class="guild-layout">
+        <div class="guild-intro panel"><div class="big-icon">⚔</div><h3>Challenge the strongest.</h3><p>Create your guild, recruit your roster and challenge another guild. Admin-verified results decide the monthly standings.</p><ul><li>✓ Guild leader dashboard</li><li>✓ Direct challenges and admin-scheduled matches</li><li>✓ Verified scores and match history</li><li>✓ Monthly #1 guild wins the champion prize</li></ul></div>
+        <div class="panel"><div class="panel-heading"><h3>Open Challenges</h3><span class="pill">LATEST</span></div><div id="challengeList" class="stack-list"><div class="empty-state">Loading challenges…</div></div></div>
+      </div>
+    </section>
+
+    <section class="section" id="leaderboard">
+      <div class="section-heading"><div><div class="eyebrow">MONTHLY COMPETITION</div><h2>Guild <span>Leaderboard</span></h2></div><div class="month-label" id="currentMonth">THIS MONTH</div></div>
+      <div class="panel table-wrap"><table><thead><tr><th>RANK</th><th>GUILD</th><th>MATCHES</th><th>WINS</th><th>POINTS</th></tr></thead><tbody id="leaderboardBody"><tr><td colspan="5" class="empty-state">Loading leaderboard…</td></tr></tbody></table></div>
+      <p class="fine-print">Scores are shown after admin verification. Points are assigned by the tournament admin; leaderboard resets monthly while past results remain in history.</p>
+    </section>
+
+    <section class="section" id="champions">
+      <div class="section-heading"><div><div class="eyebrow">HALL OF FAME</div><h2>Past <span>Champions</span></h2></div></div>
+      <div id="championsList" class="champion-grid"><div class="empty-state">Loading champion history…</div></div>
+    </section>
+
+    <section class="section dashboard-section hidden" id="dashboard">
+      <div class="section-heading"><div><div class="eyebrow">PLAYER AREA</div><h2>My <span>Dashboard</span></h2></div><span class="pill" id="roleBadge">PLAYER</span></div>
+      <div class="dashboard-grid">
+        <div class="panel"><h3>My Profile</h3><form id="profileForm" class="form-stack"><label>Display name<input id="profileName" maxlength="50" required></label><label>Free Fire UID<input id="profileUid" maxlength="30" placeholder="Your in-game UID"></label><button class="btn btn-primary">Save profile</button></form><p id="profileMessage" class="message"></p></div>
+        <div class="panel"><h3>My Guild</h3><div id="myGuildInfo" class="stack-list">No guild linked to this account yet.</div><button class="btn btn-outline" id="dashboardGuildBtn">Register a guild</button></div>
+        <div class="panel"><h3>My Tournament Entries</h3><div id="myEntries" class="stack-list">Sign in to see entries.</div></div>
+      </div>
+      <div class="panel admin-panel hidden" id="adminPanel">
+        <div class="panel-heading"><h3>Admin Control Room</h3><span class="pill pill-red">ADMIN</span></div>
+        <div class="admin-tabs"><button class="tab active" data-tab="adminTournaments">Tournaments</button><button class="tab" data-tab="adminGuilds">Guilds</button><button class="tab" data-tab="adminMatches">Guild matches</button><button class="tab" data-tab="adminPrizes">Monthly prize</button></div>
+        <div id="adminTournaments" class="admin-tab-content">
+          <form id="tournamentForm" class="form-grid"><label>Tournament name<input id="tourName" required maxlength="100"></label><label>Mode<select id="tourMode"><option>Solo</option><option>Duo</option><option>Squad</option><option>Clash Squad</option></select></label><label>Start date/time<input id="tourDate" type="datetime-local" required></label><label>Max players/teams<input id="tourLimit" type="number" min="2" max="1000" value="48" required></label><label>Prize description<input id="tourPrize" placeholder="e.g. Champion badge"></label><label>Status<select id="tourStatus"><option value="upcoming">Upcoming</option><option value="live">Live</option><option value="completed">Completed</option></select></label><button class="btn btn-primary">Create tournament</button></form>
+          <div id="adminTournamentList" class="stack-list"></div>
+        </div>
+        <div id="adminGuilds" class="admin-tab-content hidden"><div id="adminGuildList" class="stack-list">Loading guilds…</div></div>
+        <div id="adminMatches" class="admin-tab-content hidden">
+          <form id="matchForm" class="form-grid"><label>Guild A<select id="matchGuildA" required></select></label><label>Guild B<select id="matchGuildB" required></select></label><label>Match date/time<input id="matchDate" type="datetime-local" required></label><label>Match mode<select id="matchMode"><option>Squad</option><option>Clash Squad</option><option>Duo</option><option>Solo</option></select></label><button class="btn btn-primary">Schedule match</button></form>
+          <div id="adminMatchList" class="stack-list"></div>
+        </div>
+        <div id="adminPrizes" class="admin-tab-content hidden"><form id="prizeForm" class="form-grid"><label>Month (YYYY-MM)<input id="prizeMonth" placeholder="2026-10" required pattern="\\d{4}-\\d{2}"></label><label>Prize description<input id="prizeDescription" placeholder="e.g. Monthly champion prize" required></label><button class="btn btn-primary">Save monthly prize</button></form><div id="adminPrizeList" class="stack-list"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><a class="brand" href="#"><span class="brand-mark">M</span><span>MATRYX <b>ESPORTS</b><small>COMMUNITY TOURNAMENTS</small></span></a><p>Community-run tournaments. Free entry. Fair play.</p><small>Not affiliated with Garena or Free Fire. All game trademarks belong to their respective owners.</small></footer>
+
+  <div class="modal-backdrop hidden" id="authModal"><div class="modal panel"><button class="modal-close" data-close="authModal">×</button><div class="eyebrow">WELCOME TO THE ARENA</div><h2>Player <span>Access</span></h2><div class="auth-switch"><button class="tab active" data-auth="login">Login</button><button class="tab" data-auth="signup">Create account</button></div><form id="authForm" class="form-stack"><label>Email<input id="authEmail" type="email" required autocomplete="email"></label><label>Password<input id="authPassword" type="password" minlength="6" required autocomplete="current-password"></label><label id="authNameWrap" class="hidden">Display name<input id="authName" maxlength="50"></label><button class="btn btn-primary" id="authSubmit">Login</button></form><p class="message" id="authMessage"></p><p class="fine-print">Supabase setup is required before accounts can be created.</p></div></div>
+
+  <div class="modal-backdrop hidden" id="guildModal"><div class="modal panel"><button class="modal-close" data-close="guildModal">×</button><div class="eyebrow">MAKE YOUR MARK</div><h2>Register a <span>Guild</span></h2><form id="guildForm" class="form-stack"><label>Guild name<input id="guildName" required maxlength="50"></label><label>Guild ID (in-game)<input id="guildGameId" maxlength="40" placeholder="Optional"></label><label>Guild description<textarea id="guildDescription" maxlength="300" rows="3"></textarea></label><label>Logo image URL<input id="guildLogo" type="url" placeholder="Optional image URL"></label><button class="btn btn-primary">Submit guild for approval</button></form><p class="message" id="guildMessage"></p></div></div>
+
+  <div class="toast hidden" id="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
