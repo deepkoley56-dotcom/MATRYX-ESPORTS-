@@ -38,7 +38,52 @@
   };
   $("guildForm").onsubmit=async e=>{e.preventDefault();if(!user){message("guildMessage","Please log in first.",true);return;}try{const data=await run(db.from("guilds").insert({name:$("guildName").value.trim(),game_id:$("guildGameId").value.trim()||null,description:$("guildDescription").value.trim()||null,logo_url:$("guildLogo").value.trim()||null,leader_id:user.id,status:"pending"}).select().single());message("guildMessage","Guild submitted for admin approval.");$("guildForm").reset();await loadAll();toast("Guild submitted.");}catch(err){message("guildMessage",err.message,true);}};
   $("profileForm").onsubmit=async e=>{e.preventDefault();if(!user)return;try{await run(db.from("profiles").upsert({id:user.id,display_name:$("profileName").value.trim(),ff_uid:$("profileUid").value.trim()||null,updated_at:new Date().toISOString()}));message("profileMessage","Profile saved.");await refreshAuth();}catch(err){message("profileMessage",err.message,true);}};
-  $("tournamentForm").onsubmit=async e=>{e.preventDefault();try{await run(db.from("tournaments").insert({name:$("tourName").value.trim(),mode:$("tourMode").value,start_at:new Date($("tourDate").value).toISOString(),max_slots:Number($("tourLimit").value),entry_fee:Number($("tourFee").value)||0,upi_id:$("tourUpi").value.trim()||null,payment_qr_url:$("tourQr").value.trim()||null,prize_description:$("tourPrize").value.trim()||null,status:$("tourStatus").value,created_by:user.id}));$("tournamentForm").reset();$("tourLimit").value=48;toast("Tournament created.");await loadAll();}catch(err){toast(err.message,true);}};
+  let editingTournamentId = null;
+
+  function resetTournamentEditor(){
+    editingTournamentId = null;
+    $("tournamentForm").reset();
+    $("tourLimit").value = 48;
+    $("tourFee").value = 0;
+    $("tourSubmitBtn").textContent = "Create tournament";
+    $("tourCancelEdit").classList.add("hidden");
+  }
+
+  $("tourCancelEdit").onclick = resetTournamentEditor;
+
+  $("tournamentForm").onsubmit = async e => {
+    e.preventDefault();
+    if(!user || profile?.role !== "admin"){
+      toast("Admin access required.", true);
+      return;
+    }
+
+    const values = {
+      name: $("tourName").value.trim(),
+      mode: $("tourMode").value,
+      start_at: new Date($("tourDate").value).toISOString(),
+      max_slots: Number($("tourLimit").value),
+      entry_fee: Number($("tourFee").value) || 0,
+      upi_id: $("tourUpi").value.trim() || null,
+      payment_qr_url: $("tourQr").value.trim() || null,
+      prize_description: $("tourPrize").value.trim() || null,
+      status: $("tourStatus").value
+    };
+
+    try {
+      if(editingTournamentId){
+        await run(db.from("tournaments").update(values).eq("id", editingTournamentId));
+        toast("Tournament updated.");
+      } else {
+        await run(db.from("tournaments").insert({...values, created_by:user.id}));
+        toast("Tournament created.");
+      }
+      resetTournamentEditor();
+      await loadAll();
+    } catch(err) {
+      toast(err.message, true);
+    }
+  };
   $("matchForm").onsubmit=async e=>{e.preventDefault();const a=$("matchGuildA").value,b=$("matchGuildB").value;if(!a||!b||a===b){toast("Choose two different guilds.",true);return;}try{await run(db.from("guild_matches").insert({guild_a:a,guild_b:b,scheduled_at:new Date($("matchDate").value).toISOString(),mode:$("matchMode").value,status:"scheduled",created_by:user.id}));$("matchForm").reset();toast("Guild match scheduled.");await loadAll();}catch(err){toast(err.message,true);}};
   $("prizeForm").onsubmit=async e=>{e.preventDefault();try{await run(db.from("monthly_prizes").upsert({month:$("prizeMonth").value,description:$("prizeDescription").value.trim(),updated_by:user.id},{onConflict:"month"}));toast("Monthly prize saved.");await loadAll();}catch(err){toast(err.message,true);}};
   document.querySelectorAll(".admin-tabs [data-tab]").forEach(b=>b.onclick=()=>{document.querySelectorAll(".admin-tabs [data-tab]").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".admin-tab-content").forEach(x=>x.classList.toggle("hidden",x.id!==b.dataset.tab));});
@@ -140,10 +185,28 @@
   async function loadChallenges(){const rows=await safeRun(()=>run(db.from("guild_matches").select("*,guild_a_info:guilds!guild_matches_guild_a_fkey(name),guild_b_info:guilds!guild_matches_guild_b_fkey(name)").in("status",["challenge_pending","scheduled"]).order("scheduled_at",{ascending:true}).limit(10)),[]);$("challengeList").innerHTML=rows.length?rows.map(m=>`<div class="challenge-card"><div><b>${esc(m.guild_a_info?.name||"Guild A")}</b><small>vs ${esc(m.guild_b_info?.name||"Guild B")} · ${esc(m.mode)} · ${esc(dateFmt(m.scheduled_at))}</small></div><div>${statusPill(m.status)}</div></div>`).join(""):`<div class="empty-state">No open challenges or scheduled matches yet.</div>`;}
   async function loadChampions(){const rows=await safeRun(()=>run(db.from("monthly_champions").select("*,guilds(name)").order("month",{ascending:false}).limit(6)),[]);$("championsList").innerHTML=rows.length?rows.map(c=>`<div class="champion-card"><div class="trophy">🏆</div><h3>${esc(c.guilds?.name||"Champion Guild")}</h3><p>${esc(c.month)} champion</p><p>${esc(c.prize_description||"Monthly champion")}</p></div>`).join(""):`<div class="empty-state">Past champions will appear here after the admin declares a winner.</div>`;}
   async function loadDashboard(){if(!db||!user)return; $("profileName").value=profile?.display_name||user.email.split("@")[0];$("profileUid").value=profile?.ff_uid||"";const g=await safeRun(()=>run(db.from("guilds").select("*").eq("leader_id",user.id).order("created_at",{ascending:false}).limit(1)),[]);$("myGuildInfo").innerHTML=g.length?`<div class="admin-item"><div><b>${esc(g[0].name)}</b><small>${esc(g[0].game_id||"No in-game ID")} · ${statusPill(g[0].status)}</small></div></div>`:"No guild linked to this account yet.";const entries=await safeRun(()=>run(db.from("tournament_entries").select("status,tournaments(name,start_at,mode)").eq("player_id",user.id).order("created_at",{ascending:false})),[]);$("myEntries").innerHTML=entries.length?entries.map(e=>`<div class="admin-item"><div><b>${esc(e.tournaments?.name||"Tournament")}</b><small>${esc(e.tournaments?.mode||"")} · ${esc(dateFmt(e.tournaments?.start_at))}</small></div>${statusPill(e.status)}</div>`).join(""):`<div class="empty-state">No tournament entries yet.</div>`;}
-  async function loadAdminData(){if(profile?.role!=="admin")return;const ts=await safeRun(()=>run(db.from("tournaments").select("*").order("created_at",{ascending:false})),[]);$("adminTournamentList").innerHTML=ts.map(t=>`<div class="admin-item"><div><b>${esc(t.name)}</b><small>${esc(t.mode)} · ${esc(dateFmt(t.start_at))} · ${esc(t.status)}</small></div><div class="admin-item-actions"><button class="btn btn-outline btn-small" data-tourstatus="${t.id}" data-status="${t.status==="upcoming"?"live":t.status==="live"?"completed":"upcoming"}">Set ${t.status==="upcoming"?"Live":t.status==="live"?"Completed":"Upcoming"}</button><button class="btn btn-outline btn-small" data-tourdelete="${t.id}">Delete</button></div></div>`).join("")||`<div class="empty-state">No tournaments created.</div>`;
+  async function loadAdminData(){if(profile?.role!=="admin")return;const ts=await safeRun(()=>run(db.from("tournaments").select("*").order("created_at",{ascending:false})),[]);$("adminTournamentList").innerHTML=ts.map(t=>`<div class="admin-item"><div><b>${esc(t.name)}</b><small>${esc(t.mode)} · ${esc(dateFmt(t.start_at))} · ${esc(t.status)}</small></div><div class="admin-item-actions"><button class="btn btn-outline btn-small" data-tourstatus="${t.id}" data-status="${t.status==="upcoming"?"live":t.status==="live"?"completed":"upcoming"}">Set ${t.status==="upcoming"?"Live":t.status==="live"?"Completed":"Upcoming"}</button><button class="btn btn-outline btn-small" data-touredit="${encodeURIComponent(JSON.stringify(t))}">Edit</button><button class="btn btn-outline btn-small" data-tourdelete="${t.id}">Delete</button></div></div>`).join("")||`<div class="empty-state">No tournaments created.</div>`;
     const gs=await safeRun(()=>run(db.from("guilds").select("*,profiles:leader_id(display_name)").order("created_at",{ascending:false})),[]);$("adminGuildList").innerHTML=gs.map(g=>`<div class="admin-item"><div><b>${esc(g.name)}</b><small>Leader: ${esc(g.leader_id)} · ${esc(g.game_id||"No game ID")} · ${esc(g.status)}</small></div><div class="admin-item-actions">${g.status!=="approved"?`<button class="btn btn-primary btn-small" data-guildstatus="${g.id}" data-status="approved">Approve</button>`:""}<button class="btn btn-outline btn-small" data-guildstatus="${g.id}" data-status="rejected">Reject</button></div></div>`).join("")||`<div class="empty-state">No guilds registered.</div>`;
     const ms=await safeRun(()=>run(db.from("guild_matches").select("*,guild_a_info:guilds!guild_matches_guild_a_fkey(name),guild_b_info:guilds!guild_matches_guild_b_fkey(name)").order("scheduled_at",{ascending:false})),[]);$("adminMatchList").innerHTML=ms.map(m=>`<div class="admin-item"><div><b>${esc(m.guild_a_info?.name||"Guild A")} vs ${esc(m.guild_b_info?.name||"Guild B")}</b><small>${esc(dateFmt(m.scheduled_at))} · ${esc(m.mode)} · ${esc(m.status)}</small></div><div class="admin-item-actions"><button class="btn btn-primary btn-small" data-result="${m.id}">Verify result</button></div></div>`).join("")||`<div class="empty-state">No matches scheduled.</div>`;
     const ps=await safeRun(()=>run(db.from("monthly_prizes").select("*").order("month",{ascending:false})),[]);$("adminPrizeList").innerHTML=ps.map(p=>`<div class="admin-item"><div><b>${esc(p.month)}</b><small>${esc(p.description)}</small></div></div>`).join("");
+    document.querySelectorAll("[data-touredit]").forEach(b=>b.onclick=()=>{
+      const t = JSON.parse(decodeURIComponent(b.dataset.touredit));
+      editingTournamentId = t.id;
+      $("tourName").value = t.name || "";
+      $("tourMode").value = t.mode || "Solo";
+      $("tourDate").value = t.start_at ? new Date(t.start_at).toISOString().slice(0,16) : "";
+      $("tourLimit").value = t.max_slots || 48;
+      $("tourFee").value = Number(t.entry_fee || 0);
+      $("tourUpi").value = t.upi_id || "";
+      $("tourQr").value = t.payment_qr_url || "";
+      $("tourPrize").value = t.prize_description || "";
+      $("tourStatus").value = t.status || "upcoming";
+      $("tourSubmitBtn").textContent = "Save tournament changes";
+      $("tourCancelEdit").classList.remove("hidden");
+      $("tournamentForm").scrollIntoView({behavior:"smooth",block:"center"});
+      $("tourName").focus();
+    });
+
     document.querySelectorAll("[data-tourstatus]").forEach(b=>b.onclick=async()=>{await adminAction(()=>db.from("tournaments").update({status:b.dataset.status}).eq("id",b.dataset.tourstatus));});
     document.querySelectorAll("[data-tourdelete]").forEach(b=>b.onclick=async()=>{if(confirm("Delete this tournament?"))await adminAction(()=>db.from("tournaments").delete().eq("id",b.dataset.tourdelete));});
     document.querySelectorAll("[data-guildstatus]").forEach(b=>b.onclick=async()=>{await adminAction(()=>db.from("guilds").update({status:b.dataset.status}).eq("id",b.dataset.guildstatus));});
