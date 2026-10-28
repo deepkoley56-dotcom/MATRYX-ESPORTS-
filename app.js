@@ -38,7 +38,7 @@
   };
   $("guildForm").onsubmit=async e=>{e.preventDefault();if(!user){message("guildMessage","Please log in first.",true);return;}try{const data=await run(db.from("guilds").insert({name:$("guildName").value.trim(),game_id:$("guildGameId").value.trim()||null,description:$("guildDescription").value.trim()||null,logo_url:$("guildLogo").value.trim()||null,leader_id:user.id,status:"pending"}).select().single());message("guildMessage","Guild submitted for admin approval.");$("guildForm").reset();await loadAll();toast("Guild submitted.");}catch(err){message("guildMessage",err.message,true);}};
   $("profileForm").onsubmit=async e=>{e.preventDefault();if(!user)return;try{await run(db.from("profiles").upsert({id:user.id,display_name:$("profileName").value.trim(),ff_uid:$("profileUid").value.trim()||null,updated_at:new Date().toISOString()}));message("profileMessage","Profile saved.");await refreshAuth();}catch(err){message("profileMessage",err.message,true);}};
-  $("tournamentForm").onsubmit=async e=>{e.preventDefault();try{await run(db.from("tournaments").insert({name:$("tourName").value.trim(),mode:$("tourMode").value,start_at:new Date($("tourDate").value).toISOString(),max_slots:Number($("tourLimit").value),prize_description:$("tourPrize").value.trim()||null,status:$("tourStatus").value,created_by:user.id}));$("tournamentForm").reset();$("tourLimit").value=48;toast("Tournament created.");await loadAll();}catch(err){toast(err.message,true);}};
+  $("tournamentForm").onsubmit=async e=>{e.preventDefault();try{await run(db.from("tournaments").insert({name:$("tourName").value.trim(),mode:$("tourMode").value,start_at:new Date($("tourDate").value).toISOString(),max_slots:Number($("tourLimit").value),entry_fee:Number($("tourFee").value)||0,upi_id:$("tourUpi").value.trim()||null,payment_qr_url:$("tourQr").value.trim()||null,prize_description:$("tourPrize").value.trim()||null,status:$("tourStatus").value,created_by:user.id}));$("tournamentForm").reset();$("tourLimit").value=48;toast("Tournament created.");await loadAll();}catch(err){toast(err.message,true);}};
   $("matchForm").onsubmit=async e=>{e.preventDefault();const a=$("matchGuildA").value,b=$("matchGuildB").value;if(!a||!b||a===b){toast("Choose two different guilds.",true);return;}try{await run(db.from("guild_matches").insert({guild_a:a,guild_b:b,scheduled_at:new Date($("matchDate").value).toISOString(),mode:$("matchMode").value,status:"scheduled",created_by:user.id}));$("matchForm").reset();toast("Guild match scheduled.");await loadAll();}catch(err){toast(err.message,true);}};
   $("prizeForm").onsubmit=async e=>{e.preventDefault();try{await run(db.from("monthly_prizes").upsert({month:$("prizeMonth").value,description:$("prizeDescription").value.trim(),updated_by:user.id},{onConflict:"month"}));toast("Monthly prize saved.");await loadAll();}catch(err){toast(err.message,true);}};
   document.querySelectorAll(".admin-tabs [data-tab]").forEach(b=>b.onclick=()=>{document.querySelectorAll(".admin-tabs [data-tab]").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".admin-tab-content").forEach(x=>x.classList.toggle("hidden",x.id!==b.dataset.tab));});
@@ -47,9 +47,92 @@
   function renderAuth(){ $("openAuth").classList.toggle("hidden",!!user);$("openDashboard").classList.toggle("hidden",!user);$("logoutBtn").classList.toggle("hidden",!user);$("dashboard").classList.toggle("hidden",!user);if(user)$("roleBadge").textContent=profile?.role==="admin"?"ADMIN":"PLAYER";$("adminPanel").classList.toggle("hidden",profile?.role!=="admin");}
   async function loadAll(){if(!db){renderDemo();return;}await Promise.all([loadTournaments(),loadGuildsAndLeaderboard(),loadChallenges(),loadChampions(),loadAdminData()]);}
   function renderDemo(){ $("tournamentList").innerHTML=`<div class="empty-state">Connect Supabase to load real tournaments. Add records through the admin panel after setup.</div>`;$("challengeList").innerHTML=`<div class="empty-state">Guild challenges will appear here.</div>`;$("leaderboardBody").innerHTML=`<tr><td colspan="5" class="empty-state">Leaderboard will appear after guilds have verified match points.</td></tr>`;$("championsList").innerHTML=`<div class="empty-state">Monthly champions will be saved here.</div>`;$("statTournaments").textContent="0";$("statGuilds").textContent="0";$("statMatches").textContent="0";}
-  async function loadTournaments(){const rows=await safeRun(()=>run(db.from("tournaments").select("*").order("start_at",{ascending:true})),[]);$("statTournaments").textContent=rows.length;$("tournamentList").innerHTML=rows.length?rows.map(t=>`<article class="tournament-card"><div class="card-top"><span class="mode-icon">✦</span>${statusPill(t.status)}</div><h3>${esc(t.name)}</h3><p>${esc(t.mode)} tournament · Free entry</p><div class="card-meta"><span>START<br><b>${esc(dateFmt(t.start_at))}</b></span><span>LIMIT<br><b>${esc(t.max_slots||"Open")}</b></span><span>PRIZE<br><b>${esc(t.prize_description||"Champion title")}</b></span></div><div class="card-bottom"><small class="muted">Register while slots are open</small><button class="btn btn-primary btn-small" data-join="${t.id}" ${t.status!=="upcoming"?"disabled":""}>Join</button></div></article>`).join(""):`<div class="empty-state">No tournaments yet. Admin can create the first event from the dashboard.</div>`;
-    document.querySelectorAll("[data-join]").forEach(b=>b.onclick=()=>joinTournament(b.dataset.join));}
-  async function joinTournament(id){if(!user){openModal("authModal");return;}try{await run(db.from("tournament_entries").insert({tournament_id:id,player_id:user.id,status:"registered"}));toast("Tournament entry confirmed.");await loadDashboard();}catch(e){toast(e.message.includes("duplicate")?"You already joined this tournament.":e.message,true);}}
+  async function loadTournaments(){
+    const rows=await safeRun(()=>run(db.from("tournaments").select("*").order("start_at",{ascending:true})),[]);
+    const entryRows=await safeRun(()=>run(db.from("tournament_entries").select("tournament_id,status,payment_status")),[]);
+    $("statTournaments").textContent=rows.length;
+    $("tournamentList").innerHTML=rows.length?rows.map(t=>{
+      const joined=entryRows.filter(e=>e.tournament_id===t.id && (Number(t.entry_fee||0)===0 ? e.status==="registered" : e.payment_status==="approved")).length;
+      const fee=Number(t.entry_fee||0)===0?"Free entry":"₹"+Number(t.entry_fee).toFixed(2)+" entry";
+      const limit=Number(t.max_slots||0);
+      const full=limit>0 && joined>=limit;
+      return `<article class="tournament-card"><div class="card-top"><span class="mode-icon">✦</span>${statusPill(t.status)}</div><h3>${esc(t.name)}</h3><p>${esc(t.mode)} tournament · ${esc(fee)}</p><div class="card-meta"><span>START<br><b>${esc(dateFmt(t.start_at))}</b></span><span>SLOTS<br><b>${joined}/${limit||"Open"}</b></span><span>PRIZE<br><b>${esc(t.prize_description||"Champion title")}</b></span></div><div class="card-bottom"><small class="muted">${full?"Slots full":"Register while slots are open"}</small><button class="btn btn-primary btn-small" data-join="${t.id}" ${(t.status!=="upcoming"||full)?"disabled":""}>Join</button></div></article>`;
+    }).join(""):`<div class="empty-state">No tournaments yet. Admin can create the first event from the dashboard.</div>`;
+    document.querySelectorAll("[data-join]").forEach(b=>b.onclick=()=>joinTournament(b.dataset.join));
+  }
+  let selectedPaymentTournament = null;
+
+  async function joinTournament(id){
+    if(!user){openModal("authModal");return;}
+    const t = await safeRun(
+      ()=>run(db.from("tournaments").select("*").eq("id",id).single()),
+      null
+    );
+    if(!t){toast("Could not load tournament details.",true);return;}
+
+    if(Number(t.entry_fee||0) <= 0){
+      try{
+        await run(db.from("tournament_entries").insert({
+          tournament_id:id,player_id:user.id,status:"registered",
+          payment_status:"free"
+        }));
+        toast("Tournament entry confirmed.");
+        await loadDashboard();
+        await loadTournaments();
+      }catch(e){
+        toast(e.message.includes("duplicate")
+          ?"You already joined this tournament.":e.message,true);
+      }
+      return;
+    }
+
+    selectedPaymentTournament = t;
+    const upi = t.upi_id
+      ? `<p><b>UPI ID:</b> ${esc(t.upi_id)}</p>
+         <a class="btn btn-outline btn-small"
+            href="upi://pay?pa=${encodeURIComponent(t.upi_id)}&pn=${encodeURIComponent("MATRYX ESPORTS")}&am=${encodeURIComponent(Number(t.entry_fee).toFixed(2))}&cu=INR">Open UPI app</a>`
+      : `<p>Admin has not configured a UPI ID yet.</p>`;
+    const qr = t.payment_qr_url
+      ? `<p><img src="${esc(t.payment_qr_url)}" alt="Tournament payment QR" style="width:100%;max-width:260px;display:block;margin:12px auto;border-radius:12px"></p>`
+      : "";
+    $("paymentDetails").innerHTML =
+      `<h3>${esc(t.name)}</h3>
+       <p>Entry fee: <b>₹${Number(t.entry_fee).toFixed(2)}</b></p>
+       ${upi}${qr}`;
+    $("paymentReference").value = "";
+    $("paymentProof").value = "";
+    $("paymentMessage").textContent = "";
+    openModal("paymentModal");
+  }
+
+  $("paymentForm").onsubmit = async e => {
+    e.preventDefault();
+    if(!user || !selectedPaymentTournament)return;
+    const reference = $("paymentReference").value.trim();
+    if(!reference){message("paymentMessage","Enter your transaction reference.",true);return;}
+    try{
+      const t = selectedPaymentTournament;
+      await run(db.from("tournament_entries").insert({
+        tournament_id:t.id,
+        player_id:user.id,
+        status:"pending",
+        payment_status:"pending",
+        transaction_reference:reference,
+        payment_proof_url:$("paymentProof").value.trim()||null
+      }));
+      message("paymentMessage","Submitted. Wait for admin verification.");
+      toast("Payment submitted for review.");
+      $("paymentForm").reset();
+      await loadDashboard();
+      await loadTournaments();
+    }catch(err){
+      message("paymentMessage",
+        err.message.includes("duplicate")
+          ?"You already submitted an entry for this tournament."
+          :err.message,true);
+    }
+  };
+
   async function loadGuildsAndLeaderboard(){const guilds=await safeRun(()=>run(db.from("guilds").select("*").eq("status","approved").order("name")),[]);$("statGuilds").textContent=guilds.length;const matches=await safeRun(()=>run(db.from("guild_matches").select("id").gte("scheduled_at",new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString())),[]);$("statMatches").textContent=matches.length;
     const scores=await safeRun(()=>run(db.from("guild_monthly_scores").select("guild_id,points,wins,matches_played,guilds(name,logo_url)").eq("month",monthKey).order("points",{ascending:false})),[]);
     $("leaderboardBody").innerHTML=scores.length?scores.map((s,i)=>`<tr><td>${i===0?"🏆":String(i+1).padStart(2,"0")}</td><td><div class="guild-cell"><span class="guild-avatar">${esc((s.guilds?.name||"?").slice(0,1).toUpperCase())}</span>${esc(s.guilds?.name||"Guild")}</div></td><td>${s.matches_played||0}</td><td>${s.wins||0}</td><td><b>${s.points||0}</b></td></tr>`).join(""):`<tr><td colspan="5" class="empty-state">No verified scores for this month yet.</td></tr>`;
